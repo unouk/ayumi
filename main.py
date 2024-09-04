@@ -59,11 +59,12 @@ async def main():
             
             # Procesando respuesta de Ayumi
             response = ayumi_llm.ask(author=message['author'], answer=message['message'])
-            tts.play(text=response, 
-                     speaker="cgSgspJ2msm6clMCkdW9", 
-                     sync=True,
-                     model_name="eleven",
-                     device="waveout")
+            response = response.replace('...', '.').split('.')
+            for sentence in response:
+                tts.play(text=sentence, 
+                    speaker="Daisy Studious", 
+                    model_name="coqui")
+
             # Cambiando expresión
             expression = expression_llm.identify(question=message['message'], answer=response)
             if expression != 'neutral':

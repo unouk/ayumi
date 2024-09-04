@@ -1,7 +1,5 @@
 # Libreries
-import asyncio
 import datetime
-import html
 import json
 import requests
 import time
@@ -10,7 +8,6 @@ import threading
 from TTS.api import TTS
 import subprocess
 # Dependencies
-from dependencies.queue import Queue
 import queue
 from elevenlabs import Voice, VoiceSettings, save
 from elevenlabs.client import ElevenLabs
@@ -39,13 +36,13 @@ class ManagerTTS:
         while True:
             text, speaker, language, device, silence, model_name = self.task_queue.get()
             if silence is False:
-                file_name = f'audio/{int(time.time())}.mp3'
+                file_name = f'audio/{int(time.time())}.wav'
                 # wsl_path = '\\\\wsl$\\Ubuntu\\home\\daniel\\vtuber\\audio\\' + file_name
 
                 # Caso: Se eligió el modelo de Coqui
                 if model_name == "coqui":
                     self.model.tts_to_file(text=text, speaker=speaker, language=language, file_path=file_name)
-                
+
                 # Caso: Se eligió el modelo de Eleven
                 elif model_name == "eleven":
                     audio = self.eleven.generate(
@@ -113,7 +110,6 @@ class AyumiLLM:
                 "Notas: Ayumi no posee un cuerpo físico, solo vive en el mundo digital y su única forma de comunicación es a través del stream.\n\n"
                 "Tu trabajo es conversar con tus viewers, recibirás mensajes del chat del stream y responderás bajo los siguientes criterios:\n"
                 "- La respuesta debe ser en idioma español.\n"
-                "- La respuesta debe ser corta.\n"
                 "- La respuesta debe continuar la conversación.\n"
                 "- Prohibido usar emojis.\n"
                 "- Prohibido repetir frases.\n"
@@ -267,7 +263,7 @@ class StorytellerLLM:
         })
         response = self.llm.process(prompt=prompt,
                                     temperature=0.6,
-                                    repeat_penalty=1.2)
+                                    repeat_penalty=1.1)
         answer = response['message']['content']
         self.answers.append(answer)
         return answer

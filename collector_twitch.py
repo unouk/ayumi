@@ -25,7 +25,6 @@ class Bot(commands.Bot):
         if message.echo:
             return
         
-        print(message)
         self.memory.enqueue(date=message.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                             author=message.author.name, 
                             message=message.content,
@@ -34,10 +33,6 @@ class Bot(commands.Bot):
         # Since we have commands and are overriding the default `event_message`
         # We must let the bot know we want to handle and invoke our commands...
         await self.handle_commands(message)
-
-    async def event_notice(self, message: str, msg_id: str | None, channel: Channel | None):
-        print(message, msg_id, channel)
-        return await super().event_notice(message, msg_id, channel)
 
 if __name__ == '__main__':
     bot = Bot()

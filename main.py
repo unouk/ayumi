@@ -1,31 +1,77 @@
-from dependencies.models import ManagerTTS, ManagerLLM, AyumiLLM, ReaderLLM
+from dependencies.models import ManagerTTS, ManagerLLM, AyumiLLM, ReaderLLM, ExpressionLLM
 from dependencies.queue import ShortMemoryChat
-from dependencies.animation import VTubeStudio
+from dependencies.animation import Animator
 import time
 import random
+import asyncio
 
 
-if __name__ == "__main__":
+async def main():
     # Iniciando modelos base
     tts = ManagerTTS()
     llm = ManagerLLM()
     # Instanciando modelos de lenguaje
     reader_llm = ReaderLLM(llm)
-    ayumi_llm = AyumiLLM(llm)
+    ayumi_llm = AyumiLLM(llm, stream_name="Conversando de anime")
+    expression_llm = ExpressionLLM(llm)
     # Conectando con Redis
     memory = ShortMemoryChat('messages')
     memory.dequeue(script="return redis.call('DEL', KEYS[1])")
+    # Iniciando VTubeStudio
+    animator = Animator(ip="172.28.32.1", port="8001")
+    await animator.animate(f"base_{random.randint(1, 5)}")
+    animation_duration = 28
+    animation_timer = time.time()
+    expression_timer = time.time()
+    expression_active = False
 
     while True:
+        # Caso: Actualizando animación base
+        if time.time() - animation_timer > animation_duration:
+            asyncio.create_task(animator.animate(f"base_{random.randint(1, 5)}"))
+            animation_duration = random.randint(5, 10)
+            animation_timer = time.time()
+
+        # Caso: Desactivando expresión activa
+        if time.time() - expression_timer > random.randint(5, 10) and expression_active:
+            asyncio.create_task(animator.animate(f"expression_{expression}"))
+            expression_timer = time.time()
+            expression_active = False
+
         messages = memory.dequeue()
         # Caso: Existen mensajes en la memoria
         if messages:
+            # Caso: Desactivando expresión activa
+            if expression_active:
+                asyncio.create_task(animator.animate(f"expression_{expression}"))
+
             # Procesando mensajes del chat
-            message = reader_llm.select(messages)
+            if len(messages) > 1:
+                message = reader_llm.select(messages)
+                tts.play(text=message['message'], 
+                         speaker="Dionisio Schuyler", 
+                         model_name="coqui")
+            else:
+                message = messages[0]
+                tts.play(text=message['message'], 
+                         speaker="Dionisio Schuyler", 
+                         model_name="coqui")
+            
+            # Procesando respuesta de Ayumi
             response = ayumi_llm.ask(author=message['author'], answer=message['message'])
-            # Leyendo y respondiendo mensajes
-            tts.play(text=message['message'], speaker="Dionisio Schuyler", device="waveout")
-            tts.play(text=response, speaker="Daisy Studious", sync=True)
-            tts.play("", "Daisy Studious", silence=True)
-            animation_timer = time.time()
-        time.sleep(0.5)
+            tts.play(text=response, 
+                     speaker="cgSgspJ2msm6clMCkdW9", 
+                     sync=True,
+                     model_name="eleven",
+                     device="waveout")
+            # Cambiando expresión
+            expression = expression_llm.identify(question=message['message'], answer=response)
+            if expression != 'neutral':
+                asyncio.create_task(animator.animate(f"expression_{expression}"))
+                expression_active = True
+                expression_timer = time.time()
+            animation_duration = 0
+        await asyncio.sleep(0.5)
+
+if __name__ == "__main__":
+    asyncio.run(main())

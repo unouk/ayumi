@@ -13,7 +13,6 @@ class Instagram:
     def __init__(self):
         chrome_options = Options()
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument('--headless')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36")
 
@@ -25,13 +24,6 @@ class Instagram:
         self.window.find_element('css selector', '[name=username]').send_keys(username)
         self.window.find_element('css selector', '[name=password]').send_keys(password)
         self.window.find_element('css selector', '[name=password]').send_keys(Keys.RETURN)
-        time.sleep(10)
-
-    def live(self):
-        create_button = self.window.find_elements('css selector', 'div.x1iyjqo2.xh8yej3 > div')[6]
-        create_button.find_elements('css selector', 'a')[0].click()
-        time.sleep(1)
-        create_button.find_elements('css selector', 'a')[2].click()
         time.sleep(10)
 
     def read_message(self):
@@ -54,7 +46,7 @@ if __name__ == '__main__':
     memory = ShortMemoryChat('messages')
     instagram = Instagram()
     instagram.login('ayumi@ewaifu.com', '9053326aA*')
-    instagram.live()
+    time.sleep(120)
     prev_message = {"author": "", "message": ""}
     while True:
         message = instagram.read_message()
@@ -64,4 +56,4 @@ if __name__ == '__main__':
                            message=message['message'],
                            timestamp=time.time())
             prev_message = message
-        time.sleep(0.5)
+        time.sleep(3)

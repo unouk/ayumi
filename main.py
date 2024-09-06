@@ -1,18 +1,20 @@
-from dependencies.models import ManagerTTS, ManagerLLM, AyumiLLM, ReaderLLM, ExpressionLLM
+from dependencies.models import ManagerTTS, ManagerLLM, AyumiLLM, ReaderLLM, ExpressionLLM, ManagerTTS2
 from dependencies.queue import ShortMemoryChat
 from dependencies.animation import Animator
 import time
 import random
 import asyncio
+import os
+import subprocess
 
 
 async def main():
     # Iniciando modelos base
-    tts = ManagerTTS()
+    tts = ManagerTTS2()
     llm = ManagerLLM()
     # Instanciando modelos de lenguaje
     reader_llm = ReaderLLM(llm)
-    ayumi_llm = AyumiLLM(llm, stream_name="Conversando de anime")
+    ayumi_llm = AyumiLLM(llm, stream_name="Hablemos de anime")
     expression_llm = ExpressionLLM(llm)
     # Conectando con Redis
     memory = ShortMemoryChat('messages')
@@ -33,7 +35,7 @@ async def main():
             animation_timer = time.time()
 
         # Caso: Desactivando expresión activa
-        if time.time() - expression_timer > random.randint(5, 10) and expression_active:
+        if time.time() - expression_timer > random.randint(5, 20) and expression_active:
             asyncio.create_task(animator.animate(f"expression_{expression}"))
             expression_timer = time.time()
             expression_active = False
@@ -48,22 +50,17 @@ async def main():
             # Procesando mensajes del chat
             if len(messages) > 1:
                 message = reader_llm.select(messages)
-                tts.play(text=message['message'], 
-                         speaker="Dionisio Schuyler", 
-                         model_name="coqui")
+                tts.process(text=message['message'], speaker="Dionisio Schuyler")
             else:
                 message = messages[0]
-                tts.play(text=message['message'], 
-                         speaker="Dionisio Schuyler", 
-                         model_name="coqui")
+                tts.process(text=message['message'], speaker="Dionisio Schuyler")
+
             
-            # Procesando respuesta de Ayumi
+            # Procesando por partes la respuesta de Ayumi
             response = ayumi_llm.ask(author=message['author'], answer=message['message'])
             response = response.replace('...', '.').split('.')
             for sentence in response:
-                tts.play(text=sentence, 
-                    speaker="Daisy Studious", 
-                    model_name="coqui")
+                tts.process(text=sentence, speaker="Daisy Studious", device="waveout")
 
             # Cambiando expresión
             expression = expression_llm.identify(question=message['message'], answer=response)

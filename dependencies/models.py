@@ -11,7 +11,7 @@ import subprocess
 import queue
 from elevenlabs import Voice, VoiceSettings, save
 from elevenlabs.client import ElevenLabs
-
+import os
 
 class ManagerTTS:
     def __init__(self):
@@ -58,6 +58,42 @@ class ManagerTTS:
                 subprocess.run(['powershell.exe', '-c', f'Start-Process vlc -ArgumentList "--play-and-exit", "--aout={device}", "{file_name}" -Wait -WindowStyle Hidden'])
             self.task_queue.task_done()
             self.finish_event.set()
+
+
+class ManagerTTS2:
+    def __init__(self):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        # Queue process
+        self.queue_process = queue.Queue()
+        self.worker_process = threading.Thread(target=self.worker_process)
+        self.worker_process.daemon = True
+        self.worker_process.start()
+        # Queue audio
+        self.queue_audio = queue.Queue()
+        self.worker_audio = threading.Thread(target=self.worker_audio)
+        self.worker_audio.daemon = True
+        self.worker_audio.start()
+
+    def worker_process(self):
+        while True:
+            file_name, text, speaker, language = self.queue_process.get()
+            self.model.tts_to_file(text=text, speaker=speaker, language=language, file_path=file_name)
+            self.queue_process.task_done()
+
+    def worker_audio(self):
+        while True:
+            file_name, device = self.queue_audio.get()
+            while not os.path.exists(file_name):
+                time.sleep(0.1)
+            subprocess.run(['powershell.exe', '-c', f'Start-Process vlc -ArgumentList "--play-and-exit", "--aout={device}", "{file_name}" -Wait -WindowStyle Hidden'])
+            self.queue_audio.task_done()
+        
+    def process(self, text, speaker: str, language="es", device="directx"):
+        file_name = f'audio/{str(time.time())}.wav'
+        self.queue_process.put((file_name, text, speaker, language))
+        self.queue_audio.put((file_name, device))
+        return file_name
 
 
 class ManagerLLM:
@@ -244,9 +280,11 @@ class StorytellerLLM:
                 "- La pregunta debe ser español.\n"
                 "- La pregunta debe ser creativa y divertida.\n"
                 "- La pregunta debe ser corta.\n"
+                "- La pregunta debe ser en UTF-8.\n"
                 "- Prohibido decir que eres una IA.\n"
                 "- Prohibido decir que eres un agente IA.\n"
                 "- Prohibido incluir notas en la pregunta.\n"
+                "- Prohibido usar otro formato que no sea UTF-8\n"
                 "-  La pregunta debe estar relacionada con:\n"
                 f"    - {self.topic}"
             )
@@ -262,7 +300,7 @@ class StorytellerLLM:
             "content": json.dumps(self.answers)
         })
         response = self.llm.process(prompt=prompt,
-                                    temperature=0.6,
+                                    temperature=0.9,
                                     repeat_penalty=1.1)
         answer = response['message']['content']
         self.answers.append(answer)

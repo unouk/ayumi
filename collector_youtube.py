@@ -1,46 +1,67 @@
-# Libreries
-import os
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.wait import WebDriverWait
-import time
-# Dependencies
+import asyncio
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
 from dependencies.queue import ShortMemoryChat
+import time
 
 
-class Youtube:
-    def __init__(self):
-        chrome_options = Options()
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36")
+CLIENT_SECRETS_FILE = 'client_secret.json'
+SCOPES = ['https://www.googleapis.com/auth/youtube.readonly']
+API_SERVICE_NAME = 'youtube'
+API_VERSION = 'v3'
 
-        self.window = webdriver.Chrome(options=chrome_options)
-        self.window.get('https://studio.youtube.com/live_chat?is_popout=1&v=uayb-QKtmeU')
+def get_authenticated_service():
+    flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS_FILE, SCOPES)
+    credentials = flow.run_local_server(port=0)
+    return build(API_SERVICE_NAME, API_VERSION, credentials=credentials)
 
-    def read_message(self):
+async def read_messages(youtube, livechat_id, memory):
+    request = youtube.liveChatMessages().list(
+        liveChatId=livechat_id,
+        part='snippet,authorDetails',
+        maxResults=1
+    )
+    prev_message = {"author": "", "message": ""}
+    while True:
+        response = request.execute()
         message = {"author": "", "message": ""}
-        messages = self.window.find_elements('css selector', 'yt-live-chat-text-message-renderer')
-        if len(messages) > 0:
-            author = messages[-1].find_element('css selector', '#author-name').text
-            content = messages[-1].find_element('css selector', '#message').text
-            message['author'] = author
-            message['message'] = content
-        return message
+        if response['items']:
+            message['author'] = response['items'][0]['authorDetails']['displayName']
+            message['message'] = response['items'][0]['snippet']['displayMessage']
+            next_page_token = response['nextPageToken']
+            print(message)
+            if message != prev_message:
+                memory.enqueue(date=time.strftime('%Y-%m-%d %H:%M:%S'),
+                            author=message['author'],
+                            message=message['message'],
+                            timestamp=time.time())
+                prev_message = message
+
+        await asyncio.sleep(3)
+        request = youtube.liveChatMessages().list(
+            liveChatId=livechat_id,
+            part='snippet,authorDetails',
+            maxResults=1,
+            pageToken=next_page_token
+        )
+            
 
 
 if __name__ == '__main__':
     memory = ShortMemoryChat('messages')
-    youtube = Youtube()
-    time.sleep(60)
-    prev_message = {"author": "", "message": ""}
-    while True:
-        message = youtube.read_message()
-        if message != prev_message:
-            memory.enqueue(date=time.strftime('%Y-%m-%d %H:%M:%S'),
-                           author=message['author'],
-                           message=message['message'],
-                           timestamp=time.time())
-            prev_message = message
-        time.sleep(1)
+    youtube = get_authenticated_service()
+    request = youtube.liveBroadcasts().list(
+        part='snippet',
+        broadcastStatus="all",
+        broadcastType="all"
+    )
+    response = request.execute()
+    livechat_id = response['items'][0]['snippet']['liveChatId']
+
+    request = youtube.liveChatMessages().list(
+        liveChatId=livechat_id,
+        part='snippet,authorDetails',
+        maxResults=1
+    )
+    asyncio.run(read_messages(youtube, livechat_id, memory))
+

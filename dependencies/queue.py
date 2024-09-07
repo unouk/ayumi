@@ -26,7 +26,7 @@ class Queue:
             raise Exception('Queue :: dequeue :: Error al desencolar: ', e)
 
 
-class ShortMemoryChat(Queue):
+class QueueChat(Queue):
     def __init__(self, name: str,):
         super().__init__(name)
 
@@ -49,3 +49,38 @@ class ShortMemoryChat(Queue):
             return sorted(messages, key=lambda x: x['timestamp'])
         else:
             return []
+
+
+class QueueExpression(Queue):
+    def __init__(self, name: str,):
+        super().__init__(name)
+
+    def enqueue(self, expression):
+        return super().enqueue(expression)
+
+    def dequeue(self, script="""
+        local expressions = redis.call('LRANGE', KEYS[1], 0, -1)
+        redis.call('DEL', KEYS[1])
+        return expressions
+        """):
+        return super().dequeue(script)
+    
+
+class QueueFutari(Queue):
+    def __init__(self, name: str,):
+        super().__init__(name)
+
+    def enqueue(self, date: str, author: str, message: str, timestamp: str):
+        return super().enqueue(json.dumps({
+            'date': date,
+            'author': author,
+            'message': message,
+            'timestamp': timestamp
+        }))
+
+    def dequeue(self, script="""
+        local messages = redis.call('LRANGE', KEYS[1], 0, -1)
+        redis.call('DEL', KEYS[1])
+        return messages
+        """):
+        return super().dequeue(script)

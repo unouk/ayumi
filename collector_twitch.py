@@ -1,5 +1,5 @@
 from twitchio.channel import Channel
-from dependencies.queue import ShortMemoryChat
+from dependencies.queue import QueueChat
 from twitchio.ext import commands
 import os
 
@@ -11,7 +11,7 @@ class Bot(commands.Bot):
         # prefix can be a callable, which returns a list of strings or a string...
         # initial_channels can also be a callable which returns a list of strings...
         super().__init__(token=os.environ['TWITCH_OAUTH_TOKEN'], prefix='?', initial_channels=['ayumi_ewaifu'])
-        self.memory = ShortMemoryChat('messages')
+        self.memory = QueueChat('messages')
 
     async def event_ready(self):
         # Notify us when everything is ready!

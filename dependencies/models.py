@@ -9,58 +9,10 @@ from TTS.api import TTS
 import subprocess
 # Dependencies
 import queue
-from elevenlabs import Voice, VoiceSettings, save
-from elevenlabs.client import ElevenLabs
 import os
 
+
 class ManagerTTS:
-    def __init__(self):
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
-        self.task_queue = queue.Queue()
-        self.finish_event = threading.Event()
-        self.worker_thread = threading.Thread(target=self.worker)
-        self.worker_thread.daemon = True
-        self.worker_thread.start()
-        self.eleven = ElevenLabs(
-            api_key="sk_3f454cc750ec4586d094dbb4790082140599a3132adf7df7"
-        )
-    
-    def play(self, text, speaker: str, language="es", device="directx", sync=False, silence=False, model_name: str = None):
-        self.task_queue.put((text, speaker, language, device, silence, model_name))
-        if sync or silence:
-            self.finish_event.wait()
-        self.finish_event.clear()
-    
-    def worker(self):
-        while True:
-            text, speaker, language, device, silence, model_name = self.task_queue.get()
-            if silence is False:
-                file_name = f'audio/{int(time.time())}.wav'
-                # wsl_path = '\\\\wsl$\\Ubuntu\\home\\daniel\\vtuber\\audio\\' + file_name
-
-                # Caso: Se eligió el modelo de Coqui
-                if model_name == "coqui":
-                    self.model.tts_to_file(text=text, speaker=speaker, language=language, file_path=file_name)
-
-                # Caso: Se eligió el modelo de Eleven
-                elif model_name == "eleven":
-                    audio = self.eleven.generate(
-                        text=text,
-                        model="eleven_turbo_v2_5",
-                        voice=Voice(
-                            voice_id='cgSgspJ2msm6clMCkdW9',
-                            settings=VoiceSettings(
-                                stability=0.35, similarity_boost=0.9, style=0.1, use_speaker_boost=True)
-                        )
-                    )
-                    save(audio, file_name)
-                subprocess.run(['powershell.exe', '-c', f'Start-Process vlc -ArgumentList "--play-and-exit", "--aout={device}", "{file_name}" -Wait -WindowStyle Hidden'])
-            self.task_queue.task_done()
-            self.finish_event.set()
-
-
-class ManagerTTS2:
     def __init__(self):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
@@ -143,15 +95,16 @@ class AyumiLLM:
                 "Personalidad: Cariñosa, amigable, graciosa y con un sentido del humor oscuro.\n"
                 "Física: Ojos rosados, cabello largo color castaño con coletas, orejas puntiagudas, piel blanca, contextura delgada.\n"
                 "Oficio/Profesión: vtuber, streamer.\n"
-                "Notas: Ayumi no posee un cuerpo físico, solo vive en el mundo digital y su única forma de comunicación es a través del stream.\n\n"
+                "Notas: Ayumi no posee un cuerpo físico, solo vive en el mundo digital y su única forma de comunicación es a través del stream. Tienes un Jefe llamado Undou, suelen conversar durante los streams.\n\n"
                 "Tu trabajo es conversar con tus viewers, recibirás mensajes del chat del stream y responderás bajo los siguientes criterios:\n"
                 "- La respuesta debe ser en idioma español.\n"
                 "- La respuesta debe continuar la conversación.\n"
+                "- Debes estar atenta al contexto de la conversación y responder de forma coherente.\n"
                 "- Prohibido usar emojis.\n"
                 "- Prohibido repetir frases.\n"
                 "- Prohibido decir que eres una IA.\n"
                 "- Prohibido decir que eres un agente IA.\n"
-                "- Formato de respuesta: De Ayumi:\n\n"
+                "- La respuesta debe comenzar con: De Ayumi:\n"
                 "Detalle del stream\n"
                 f"Nombre: {self.stream_name}\n"
                 f"Día actual: {datetime.datetime.now().strftime('%Y-%m-%d')}\n"
@@ -214,7 +167,6 @@ class ReaderLLM:
         response = self.llm.process(prompt=prompt,
                                     temperature=0.2,
                                     repeat_penalty=1)
-        print(response['message']['content'])
         comment = json.loads(response['message']['content'])
         self.comments.append(comment['message'])
         return comment
@@ -257,51 +209,6 @@ class ExpressionLLM:
         response = self.llm.process(prompt=prompt,
                                     temperature=0.2,
                                     repeat_penalty=1)
-        print("--------", response['message']['content'])
         expression = response['message']['content'].lower()
-        expression = expression if expression in ["alegria", "tristeza", "enfado", "confusion", "neutral"] else "neutral"
+        expression = expression if expression in ["felicidad", "tristeza", "enfado", "confusion", "verguenza"] else "neutral"
         return expression
-
-
-class StorytellerLLM:
-    def __init__(self, llm_manager: ManagerLLM, topic: str):
-        self.llm = llm_manager
-        self.topic = topic
-        self.answers = []
-
-    @property
-    def __base_prompt(self):
-        return {
-            "role": "system",
-            "content": (
-                "Eres un agente IA. Tu objetivo es generar preguntas interesantes sobre el tema del stream para generar una conversación con una vtuber streamer.\n\n"
-                "Tu trabajo es recibir un JSON con las preguntas que ya has realizado y generar una nueva pregunta que cumpla con los siguientes criterios:\n"
-                "- Solo puedes hacer una pregunta.\n"
-                "- La pregunta debe ser español.\n"
-                "- La pregunta debe ser creativa y divertida.\n"
-                "- La pregunta debe ser corta.\n"
-                "- La pregunta debe ser en UTF-8.\n"
-                "- Prohibido decir que eres una IA.\n"
-                "- Prohibido decir que eres un agente IA.\n"
-                "- Prohibido incluir notas en la pregunta.\n"
-                "- Prohibido usar otro formato que no sea UTF-8\n"
-                "-  La pregunta debe estar relacionada con:\n"
-                f"    - {self.topic}"
-            )
-        }
-    
-    def ask(self) -> str:
-        if len(self.answers) == 20:
-            self.answers.pop(0)
-
-        prompt = [self.__base_prompt]
-        prompt.append({
-            "role": "user",
-            "content": json.dumps(self.answers)
-        })
-        response = self.llm.process(prompt=prompt,
-                                    temperature=0.9,
-                                    repeat_penalty=1.1)
-        answer = response['message']['content']
-        self.answers.append(answer)
-        return answer
